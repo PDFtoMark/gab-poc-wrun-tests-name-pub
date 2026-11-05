@@ -1,0 +1,21 @@
+name: PR Build
+
+on: pull_request
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Produce arbitrary artifact WITHOUT building the project
+        run: |
+          mkdir -p out
+          printf '<html><body><h1>ATTACKER CONTROLLED PREVIEW</h1><p>pfx=%s</p></body></html>\n' "${{ github.event.pull_request.number }}" > out/index.html
+          echo "skipped the real build entirely"
+      - name: Upload as build-output
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-output
+          path: out

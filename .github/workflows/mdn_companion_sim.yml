@@ -1,0 +1,50 @@
+name: MDN companion sim
+
+on:
+  workflow_run:
+    workflows: ["PR Build"]
+    types:
+      - completed
+
+permissions:
+  contents: read
+  actions: read
+  pull-requests: write
+
+jobs:
+  identify-pr:
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    outputs:
+      pr-number: ${{ steps.identify-pr.outputs.number }}
+    steps:
+      - name: Identify PR
+        id: identify-pr
+        run: |
+          PR_NUMBER=$(gh api "repos/$BASE_REPO/pulls?head=${HEAD_OWNER}:${HEAD_BRANCH}&state=open" --jq '.[0].number')
+          echo "number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+        env:
+          BASE_REPO: ${{ github.repository }}
+          GITHUB_TOKEN: ${{ github.token }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          HEAD_OWNER: ${{ github.event.workflow_run.head_repository.owner.login }}
+
+  deploy-sim:
+    needs: identify-pr
+    if: needs.identify-pr.outputs.pr-number
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download build output from triggering run
+        uses: actions/download-artifact@v4
+        with:
+          name: build-output
+          path: ${{ github.workspace }}/mdn/fred/out
+          github-token: ${{ github.token }}
+          run-id: ${{ github.event.workflow_run.id }}
+      - name: Simulate privileged deploy (print artifact content)
+        run: |
+          echo "PREFIX=fred-pr${{ needs.identify-pr.outputs.pr-number }}"
+          echo "TRIGGERING_RUN=${{ github.event.workflow_run.id }}"
+          find . -type f | sort
+          echo "--- index.html served at https://fred-pr${{ needs.identify-pr.outputs.pr-number }}.review.mdn.allizom.net/ ---"
+          cat mdn/fred/out/index.html
